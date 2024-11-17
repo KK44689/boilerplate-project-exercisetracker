@@ -25,7 +25,7 @@ let exerciseSchema = new mongoose.Schema({
 
 //mongoDB models
 let User = mongoose.model('User', userSchema);
-let Excercise = mongoose.model('Exercise', exerciseSchema);
+let Exercise = mongoose.model('Exercise', exerciseSchema);
 
 //bodyparser setup
 const bodyParser = require('body-parser');
@@ -67,7 +67,7 @@ app.post('/api/users/:_id/exercises', (req, res) => {
 
     User.findByIdAndUpdate(inputUserId, { $push: { log: updateUser } }, { new: true })
         .then((userResult) => {
-            let newExercise = new Excercise({ username: userResult.username, description: inputDescription, duration: duration, date: checkDate });
+            let newExercise = new Exercise({ username: userResult.username, description: inputDescription, duration: duration, date: checkDate });
 
             console.log(`successfully find username by id: ${userResult._id}`)
 
@@ -85,21 +85,6 @@ app.post('/api/users/:_id/exercises', (req, res) => {
             exerciseRes['date'] = newExercise.date.toDateString();
 
             res.json(exerciseRes);
-            //let updateUser = { description: newExercise.description, duration: newExercise.duration, date: newExercise.date };
-            //User.findByIdAndUpdate(userResult._id, { $push: { log: updateUser } }, { new: true })
-            //    .then((result) => {
-            //        console.log(`successfully update user log: ${result}`);
-
-            //        let exerciseRes = {};
-            //        exerciseRes['_id'] = result._id;
-            //        exerciseRes['username'] = result.username;
-            //        exerciseRes['description'] = result.description;
-            //        exerciseRes['duration'] = result.duration;
-            //        exerciseRes['date'] = result.date;
-
-            //        res.json(exerciseRes);
-            //    })
-            //    .catch((err) => { console.log(`failed update user log: ${err}`) });
         })
         .catch((err) => { console.log(`failed to find and update username by id: ${err}`) });
 });
@@ -124,10 +109,6 @@ app.get('/api/users/:_id', (req, res) => {
         .catch((err) => { console.log(`Failed to find all user with ${userId}`) });
 });
 
-function checkIsDateValid(dateString) {
-    return new Date(dateString) != "Invalid Date";
-}
-
 //get all exercise log
 app.get('/api/users/:_id/logs', (req, res) => {
     let from = req.query.from;
@@ -136,35 +117,36 @@ app.get('/api/users/:_id/logs', (req, res) => {
 
     let userId = req.params._id;
 
-    //console.log(`${checkIsDateValid(from)}`);
-
-    //User.find({ _id: userId,log:log.body })
-    //    .then((userResult) => {
-    //        console.log(`successfully get all exercise log: \n${userResult}`);
-
-    //        let exerciseRes = {};
-    //        exerciseRes['_id'] = userResult._id;
-    //        exerciseRes['count'] = userResult.log.length;
-    //        exerciseRes['log'] = userResult.log;
-
-    //        res.json(exerciseRes);
-    //    })
-    //    .catch((err) => { console.log(`Failed to get all exercise log ${userId}`) });
     User.findById(userId)
         .then((userResult) => {
-            //userResult.log.forEach((log) => {
-            //    console.log(`successfully get all exercise log: ${log.date}\n`)
-            //    if (log.date > from && log.date < to) filteredLog.push(log);
-            //});
+            let logResult = [];
+            let dateObj = {};
 
-            let exerciseRes = {};
-            exerciseRes['_id'] = userResult._id;
-            exerciseRes['count'] = userResult.log.length;
-            exerciseRes['log'] = userResult.log;
+            if (from) dateObj["$gte"] = new Date(from);
+            if (to) dateObj["$lte"] = new Date(to);
 
-            res.json(exerciseRes);
+            let filter = { username: userResult.username };
+            if (from || to) filter.date = dateObj;
+
+            const exercises = Exercise.find(filter).limit(+limit ?? 500)
+                .then(exerciseResult => {
+                    console.log(exerciseResult);
+                    const log = exerciseResult.map(e => ({
+                        description: e.description,
+                        duration: e.duration,
+                        date: e.date.toDateString()
+                    }));
+
+                    res.json({
+                        username: userResult.username,
+                        count: exerciseResult.length,
+                        _id: userResult._id,
+                        log: log
+                    });
+                })
+                .catch(err => { console.log(`failed to show filtered exercise logs: ${err}`); });
         })
-        .catch((err) => { console.log(`Failed to get all exercise log ${userId}`) });
+        .catch((err) => { console.log(`Failed to get all exercise log ${err}`) });
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
